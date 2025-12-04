@@ -194,6 +194,10 @@ if not DEBUG:
 
 CORS_ALLOW_CREDENTIALS = True
 
+# CSRF settings for Railway
+CSRF_TRUSTED_ORIGINS = [
+    'https://web-production-24d4c.up.railway.app',
+]
 
 # Logging configuration
 
