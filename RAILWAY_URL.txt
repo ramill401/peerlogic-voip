@@ -1,0 +1,11 @@
+Railway Backend URL: https://web-production-24d4c.up.railway.app
+
+API Endpoints:
+- Health: https://web-production-24d4c.up.railway.app/api/health/
+- API Docs: https://web-production-24d4c.up.railway.app/api/docs/
+- Django Admin: https://web-production-24d4c.up.railway.app/admin/
+- API Base: https://web-production-24d4c.up.railway.app/api
+
+Frontend Configuration:
+VITE_API_URL=https://web-production-24d4c.up.railway.app/api
+

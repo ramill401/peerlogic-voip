@@ -21,8 +21,8 @@ DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
-# Add for Railway
-if os.getenv('RAILWAY_STATIC_URL'):
+# Add for Railway (if DATABASE_URL is set, we're likely on Railway)
+if os.getenv('DATABASE_URL') or os.getenv('RAILWAY_STATIC_URL'):
     ALLOWED_HOSTS.append('.railway.app')
 
 
