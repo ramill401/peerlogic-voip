@@ -4,7 +4,7 @@ import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
 
 // Update with your Railway connection ID
-const CONNECTION_ID = import.meta.env.VITE_CONNECTION_ID || '9199698e-b059-4b58-b8cc-051c884eca78'
+const CONNECTION_ID = import.meta.env.VITE_CONNECTION_ID || '5f76026e-210f-41f4-a6b9-a88f1a2762a6'
 
 const api = axios.create({
   baseURL: API_BASE,
