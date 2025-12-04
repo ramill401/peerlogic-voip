@@ -4,11 +4,14 @@ URL routing for VoIP API.
 
 from django.urls import path
 from . import views
+from . import setup_views
 
 urlpatterns = [
     # Health & Info
     path('health/', views.api_health, name='api-health'),
     path('info/', views.api_info, name='api-info'),
+    # Setup (one-time)
+    path('setup/', setup_views.run_initial_setup, name='api-setup'),
     
     # Connections
     path('connections/', views.list_connections, name='list-connections'),
