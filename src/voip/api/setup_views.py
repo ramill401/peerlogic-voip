@@ -20,16 +20,19 @@ def run_initial_setup(request):
     This is a one-time setup endpoint for Railway deployment.
     """
     try:
+        # Run migrations first (this is safe to run multiple times)
+        logger.info("Running migrations...")
+        call_command('migrate', verbosity=0, interactive=False)
+        logger.info("Migrations completed")
+        
         # Check if setup already done
         if ProviderConnection.objects.exists():
+            connection = ProviderConnection.objects.first()
             return JsonResponse({
                 "status": "already_setup",
                 "message": "Setup already completed",
-                "connection_id": str(ProviderConnection.objects.first().id)
+                "connection_id": str(connection.id)
             })
-        
-        # Run migrations (should already be done by pre-deploy, but safe to run again)
-        call_command('migrate', verbosity=0)
         
         # Create superuser if doesn't exist
         if not User.objects.filter(is_superuser=True).exists():
