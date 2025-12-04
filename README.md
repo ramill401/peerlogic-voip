@@ -38,23 +38,30 @@ Provider API
 ```bash
    cp .env.example .env
 ```
-3. Create virtual environment:
+3. Install Poetry (if not already installed):
 ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Mac/Linux
+   curl -sSL https://install.python-poetry.org | python3 -
+   # Or: pip install poetry
 ```
 4. Install dependencies:
 ```bash
-   pip install -r requirements.txt
+   poetry install
 ```
-5. Run migrations:
+5. Activate Poetry shell (optional):
 ```bash
-   python manage.py migrate
+   poetry shell
+   # Or run commands with 'poetry run' prefix
 ```
-6. Start server:
+6. Run migrations:
 ```bash
-   python manage.py runserver
+   poetry run python manage.py migrate
 ```
+7. Start server:
+```bash
+   poetry run python manage.py runserver
+```
+
+**Note:** This project uses Poetry for dependency management. You can also use `pip install -r requirements.txt` if Poetry is not available, but Poetry is recommended.
 
 ## Project Structure
 ```

@@ -6,7 +6,7 @@ These views provide the HTTP interface for VoIP operations.
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 from django.http import JsonResponse
 from rest_framework import status
@@ -15,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
 
 from src.voip_admin.models import Practice, ProviderConnection
+from src.voip_admin.permissions import IsPracticeMember, CanManageVoIP, CanAccessConnection
 
 
 logger = logging.getLogger("voip.api")
@@ -35,6 +36,32 @@ def run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+def verify_connection_access(request: Request, connection_id: str) -> Tuple[Optional[ProviderConnection], Optional[JsonResponse]]:
+    """
+    Verify user has access to a connection.
+    Returns (connection, None) if access granted, (None, error_response) if denied.
+    """
+    try:
+        conn = ProviderConnection.objects.select_related('practice').get(id=connection_id)
+    except ProviderConnection.DoesNotExist:
+        return None, error_response(
+            "NOT_FOUND",
+            f"Connection not found: {connection_id}",
+            status_code=404
+        )
+    
+    # Check practice-level access
+    permission = CanAccessConnection()
+    if not permission.has_object_permission(request, None, conn):
+        return None, error_response(
+            "FORBIDDEN",
+            "You do not have access to this connection",
+            status_code=403
+        )
+    
+    return conn, None
 
 
 # ================================================================
@@ -77,13 +104,23 @@ def api_info(request: Request) -> JsonResponse:
 # ================================================================
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def list_connections(request: Request) -> JsonResponse:
-    """List all provider connections."""
+    """List all provider connections (filtered by practice for multi-tenant)."""
     
+    # Multi-tenant filtering: only show connections for user's practice
+    # For MVP: superusers see all, regular users see their practice only
     connections = ProviderConnection.objects.select_related(
         'practice', 'provider'
     ).all()
+    
+    # Filter by practice if user is not superuser
+    # TODO: When user-practice relationship model exists, filter by user.practice
+    # For now, superusers see all, others see empty (will be fixed when user-practice model added)
+    if not request.user.is_superuser:
+        # For MVP, return empty list for non-superusers until user-practice model exists
+        # In production, this would be: connections = connections.filter(practice=request.user.practice)
+        connections = connections.none()
     
     data = [
         {
@@ -108,9 +145,9 @@ def list_connections(request: Request) -> JsonResponse:
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def get_connection(request: Request, connection_id: str) -> JsonResponse:
-    """Get a single connection by ID."""
+    """Get a single connection by ID (with practice-level access control)."""
     
     try:
         conn = ProviderConnection.objects.select_related(
@@ -121,6 +158,15 @@ def get_connection(request: Request, connection_id: str) -> JsonResponse:
             "NOT_FOUND",
             f"Connection not found: {connection_id}",
             status_code=404
+        )
+    
+    # Check practice-level access
+    permission = CanAccessConnection()
+    if not permission.has_object_permission(request, None, conn):
+        return error_response(
+            "FORBIDDEN",
+            "You do not have access to this connection",
+            status_code=403
         )
     
     return JsonResponse({
@@ -147,10 +193,15 @@ def get_connection(request: Request, connection_id: str) -> JsonResponse:
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def test_connection(request: Request, connection_id: str) -> JsonResponse:
     """Test a provider connection."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _test():
         service = VoIPService(connection_id, request.user)
@@ -175,10 +226,15 @@ def test_connection(request: Request, connection_id: str) -> JsonResponse:
 # ================================================================
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def list_users(request: Request, connection_id: str) -> JsonResponse:
-    """List users for a connection."""
+    """List users for a connection (with practice-level access control)."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     page = int(request.query_params.get('page', 1))
     page_size = int(request.query_params.get('page_size', 50))
@@ -208,10 +264,15 @@ def list_users(request: Request, connection_id: str) -> JsonResponse:
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def get_user(request: Request, connection_id: str, user_id: str) -> JsonResponse:
     """Get a single user."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _get():
         service = VoIPService(connection_id, request.user)
@@ -232,10 +293,15 @@ def get_user(request: Request, connection_id: str, user_id: str) -> JsonResponse
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def create_user(request: Request, connection_id: str) -> JsonResponse:
     """Create a new user."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _create():
         service = VoIPService(connection_id, request.user)
@@ -256,10 +322,15 @@ def create_user(request: Request, connection_id: str) -> JsonResponse:
 
 
 @api_view(['PUT', 'PATCH'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def update_user(request: Request, connection_id: str, user_id: str) -> JsonResponse:
     """Update a user."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _update():
         service = VoIPService(connection_id, request.user)
@@ -280,10 +351,15 @@ def update_user(request: Request, connection_id: str, user_id: str) -> JsonRespo
 
 
 @api_view(['DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def delete_user(request: Request, connection_id: str, user_id: str) -> JsonResponse:
     """Delete a user."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _delete():
         service = VoIPService(connection_id, request.user)
@@ -308,10 +384,15 @@ def delete_user(request: Request, connection_id: str, user_id: str) -> JsonRespo
 # ================================================================
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def list_devices(request: Request, connection_id: str) -> JsonResponse:
     """List devices for a connection."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     page = int(request.query_params.get('page', 1))
     page_size = int(request.query_params.get('page_size', 50))
@@ -340,10 +421,15 @@ def list_devices(request: Request, connection_id: str) -> JsonResponse:
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def get_device(request: Request, connection_id: str, device_id: str) -> JsonResponse:
     """Get a single device."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _get():
         service = VoIPService(connection_id, request.user)
@@ -364,10 +450,15 @@ def get_device(request: Request, connection_id: str, device_id: str) -> JsonResp
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def create_device(request: Request, connection_id: str) -> JsonResponse:
     """Create a new device."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _create():
         service = VoIPService(connection_id, request.user)
@@ -388,10 +479,15 @@ def create_device(request: Request, connection_id: str) -> JsonResponse:
 
 
 @api_view(['DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated, CanManageVoIP])
 def delete_device(request: Request, connection_id: str, device_id: str) -> JsonResponse:
     """Delete a device."""
     from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
     
     async def _delete():
         service = VoIPService(connection_id, request.user)

@@ -2,9 +2,10 @@
 
 ## ✅ Completed
 
-- [x] Created `Procfile` for Railway
+- [x] Created `Procfile` for Railway (uses Poetry)
 - [x] Created `runtime.txt` (Python 3.11.6)
-- [x] Updated `requirements.txt` with production dependencies
+- [x] Created `pyproject.toml` with Poetry dependencies
+- [x] Created `poetry.lock` for reproducible builds
 - [x] Updated Django settings for production:
   - [x] Database URL configuration (PostgreSQL in production, SQLite locally)
   - [x] WhiteNoise for static files
@@ -54,16 +55,22 @@ git push origin main
 
 **Option A: Railway Dashboard**
 - Click your web service → "Settings" → Use the shell/CLI option
+- Run:
+  ```bash
+  poetry run python manage.py migrate
+  poetry run python manage.py initial_setup
+  ```
 
 **Option B: Railway CLI**
 ```bash
 npm install -g @railway/cli
 railway login
 railway link
-railway run python manage.py migrate
-railway run python manage.py createsuperuser
-railway run python manage.py setup_mock_connection
+railway run poetry run python manage.py migrate
+railway run poetry run python manage.py initial_setup
 ```
+
+**Note:** Railway supports Poetry natively! It will auto-detect `pyproject.toml` and use Poetry for dependency management.
 
 **Note the Connection ID** from the setup_mock_connection output.
 

@@ -8,7 +8,8 @@ from .models import (
     Practice, 
     ProviderConnection, 
     ProviderCredential,
-    AuditLog
+    AuditLog,
+    IDMapping
 )
 
 
@@ -65,3 +66,12 @@ class AuditLogAdmin(admin.ModelAdmin):
     
     def has_change_permission(self, request, obj=None):
         return False  # Audit logs should never be modified
+
+
+@admin.register(IDMapping)
+class IDMappingAdmin(admin.ModelAdmin):
+    list_display = ['connection', 'resource_type', 'peerlogic_id', 'provider_id', 'created_at']
+    list_filter = ['resource_type', 'connection', 'created_at']
+    search_fields = ['peerlogic_id', 'provider_id']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    ordering = ['-created_at']

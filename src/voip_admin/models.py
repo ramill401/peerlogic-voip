@@ -270,3 +270,56 @@ class AuditLog(models.Model):
     
     def __str__(self):
         return f"{self.action} {self.resource_type} - {self.result} - {self.created_at}"
+
+
+class IDMapping(models.Model):
+    """
+    Maps Peerlogic resource IDs to provider-specific IDs.
+    
+    This ensures we don't leak provider IDs into the UI and allows us to
+    maintain stable Peerlogic IDs even if provider IDs change.
+    """
+    
+    RESOURCE_TYPE_CHOICES = [
+        ('user', 'User'),
+        ('device', 'Device'),
+        ('call_queue', 'Call Queue'),
+        ('number', 'Phone Number'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # Connection context
+    connection = models.ForeignKey(
+        ProviderConnection,
+        on_delete=models.CASCADE,
+        related_name='id_mappings'
+    )
+    
+    # Resource identification
+    resource_type = models.CharField(max_length=20, choices=RESOURCE_TYPE_CHOICES)
+    peerlogic_id = models.CharField(
+        max_length=100,
+        help_text="Stable ID used in Peerlogic API/UI"
+    )
+    provider_id = models.CharField(
+        max_length=100,
+        help_text="Provider-specific ID (e.g., NetSapiens user_id)"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'voip_id_mapping'
+        verbose_name = 'ID Mapping'
+        verbose_name_plural = 'ID Mappings'
+        unique_together = ['connection', 'resource_type', 'peerlogic_id']
+        indexes = [
+            models.Index(fields=['connection', 'resource_type', 'provider_id']),
+            models.Index(fields=['connection', 'resource_type', 'peerlogic_id']),
+        ]
+    
+    def __str__(self):
+        return f"{self.resource_type}: {self.peerlogic_id} ↔ {self.provider_id}"

@@ -139,7 +139,11 @@ class NetSapiensAdapter(BaseVoIPAdapter):
                 )
             
             # Build OAuth token request
+            # NetSapiens OAuth2 endpoint is at /ns-api/oauth2/token/ per official documentation
+            # Reference: https://api.netsapiens.com/ns-api/webroot/apidoc/#api-Oauth2
+            # Use the base_url which already includes /ns-api/
             token_url = f"{self.config.base_url}oauth2/token/"
+            
             token_params = {
                 "grant_type": grant_type,
                 "client_id": self.client_id,
@@ -167,16 +171,40 @@ class NetSapiensAdapter(BaseVoIPAdapter):
                     try:
                         error_json = response.json()
                         error_msg = error_json.get("error_description") or error_json.get("error") or error_body
-                    except:
-                        error_msg = error_body
+                    except (ValueError, TypeError):
+                        error_msg = error_body or f"Empty response from server (status {response.status_code})"
                     return AdapterResult.fail(
                         code="AUTH_ERROR",
                         message=f"OAuth authentication failed: {response.status_code} - {error_msg}",
                         details={"response": error_body, "status_code": response.status_code}
                     )
                 
-                token_data = response.json()
+                # Parse JSON response with error handling
+                try:
+                    response_text = response.text
+                    if not response_text or not response_text.strip():
+                        return AdapterResult.fail(
+                            code="AUTH_ERROR",
+                            message="Empty response from OAuth endpoint",
+                            details={"status_code": response.status_code, "headers": dict(response.headers)}
+                        )
+                    token_data = response.json()
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to parse OAuth response as JSON: {e}. Response: {response.text[:500]}")
+                    return AdapterResult.fail(
+                        code="AUTH_ERROR",
+                        message=f"Invalid JSON response from OAuth endpoint: {str(e)}",
+                        details={"response_preview": response.text[:500], "status_code": response.status_code}
+                    )
+                
                 self._access_token = token_data.get("access_token")
+                
+                # Extract domain from OAuth response if available (more reliable than config)
+                # OAuth response contains the actual domain name (e.g., "Peerlogic"), not the hostname
+                oauth_domain = token_data.get("domain")
+                if oauth_domain:
+                    self.domain = oauth_domain
+                    logger.info(f"Using domain from OAuth response: {oauth_domain} (was: {self.config.config.get('domain', '')})")
                 
                 # Store token expiration if provided
                 expires_in = token_data.get("expires_in")
@@ -252,8 +280,22 @@ class NetSapiensAdapter(BaseVoIPAdapter):
                     details={"response": error_body}
                 )
             
-            # Parse JSON response
-            data = response.json() if response.text else {}
+            # Parse JSON response with error handling
+            try:
+                response_text = response.text
+                if not response_text or not response_text.strip():
+                    # Empty response is valid for some endpoints (e.g., DELETE)
+                    data = {}
+                else:
+                    data = response.json()
+            except (ValueError, TypeError) as e:
+                logger.error(f"Failed to parse API response as JSON: {e}. Response: {response.text[:500]}")
+                return AdapterResult.fail(
+                    code="PARSE_ERROR",
+                    message=f"Invalid JSON response from API: {str(e)}",
+                    details={"response_preview": response.text[:500], "status_code": response.status_code}
+                )
+            
             return AdapterResult.ok(data)
             
         except httpx.TimeoutException:

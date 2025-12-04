@@ -107,6 +107,7 @@ class Command(BaseCommand):
                 credentials = {
                     'client_id': client_id,
                     'client_secret': client_secret,
+                    'grant_type': 'password',  # Use password grant when username/password provided
                     'username': username,
                     'password': password,
                 }
@@ -128,6 +129,7 @@ class Command(BaseCommand):
                 credentials = {
                     'client_id': options['client_id'],
                     'client_secret': options['client_secret'],
+                    'grant_type': 'password',  # Use password grant when username/password provided
                     'username': username,
                     'password': password,
                 }
