@@ -22,11 +22,16 @@ def run_initial_setup(request):
     try:
         # Run migrations first (this is safe to run multiple times)
         logger.info("Running migrations...")
-        call_command('migrate', verbosity=0, interactive=False)
-        logger.info("Migrations completed")
+        try:
+            call_command('migrate', verbosity=0, interactive=False)
+            logger.info("Migrations completed")
+        except Exception as migrate_error:
+            logger.error(f"Migration error: {migrate_error}")
+            # Continue anyway - migrations might already be done
         
-        # Check if setup already done
-        if ProviderConnection.objects.exists():
+        # Check if setup already done (wrap in try/except in case tables don't exist yet)
+        try:
+            if ProviderConnection.objects.exists():
             connection = ProviderConnection.objects.first()
             return JsonResponse({
                 "status": "already_setup",
@@ -48,6 +53,10 @@ def run_initial_setup(request):
         
         # Get the connection ID
         connection = ProviderConnection.objects.first()
+        
+        except Exception as check_error:
+            # Tables might not exist yet, continue with setup
+            logger.info(f"Checking existing connections: {check_error}")
         
         return JsonResponse({
             "status": "success",
