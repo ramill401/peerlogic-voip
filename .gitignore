@@ -44,5 +44,7 @@ htmlcov/
 
 # OS files
 .DS_Store
-Thumbs.db.env.bak
+Thumbs.db
+
+# Backup files
 *.bak
