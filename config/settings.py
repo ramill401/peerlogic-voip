@@ -180,6 +180,14 @@ CORS_ALLOWED_ORIGINS = [
 
 # For production, also add:
 if not DEBUG:
+    # Always allow localhost for local development (even in production Railway)
+    # This allows testing frontend locally against Railway backend
+    CORS_ALLOWED_ORIGINS.extend([
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ])
+    
+    # Add production frontend URL if set
     frontend_url = os.getenv('FRONTEND_URL', '')
     if frontend_url:
         CORS_ALLOWED_ORIGINS.append(frontend_url)

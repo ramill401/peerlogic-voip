@@ -56,6 +56,19 @@
 
 <script setup>
 import { useRoute } from 'vue-router'
+import { onMounted } from 'vue'
+import { voipApi } from './services/api'
 
 const route = useRoute()
+
+// Check authentication on app mount
+onMounted(async () => {
+  try {
+    // Try to fetch connections to check if authenticated
+    await voipApi.getConnections()
+  } catch (err) {
+    // Error will be handled by interceptor (redirects to login)
+    console.log('Auth check failed, redirecting...')
+  }
+})
 </script>

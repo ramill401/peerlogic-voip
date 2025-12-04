@@ -23,12 +23,21 @@ api.interceptors.response.use(
         console.error('Authentication required. Please log in.')
         // For MVP: redirect to Django admin login
         // In production, redirect to Peerlogic login page
-        window.location.href = `${API_BASE.replace('/api', '')}/admin/login/?next=${window.location.pathname}`
+        const baseUrl = API_BASE.replace('/api', '')
+        window.location.href = `${baseUrl}/admin/login/?next=${encodeURIComponent(window.location.href)}`
+        return Promise.reject(error)
       }
-      // Handle 403 Forbidden - show access denied message
+      // Handle 403 Forbidden - redirect to login (might be unauthenticated)
       if (error.response.status === 403) {
-        console.error('Access denied. You do not have permission to perform this action.')
+        console.error('Access denied. Redirecting to login...')
+        const baseUrl = API_BASE.replace('/api', '')
+        window.location.href = `${baseUrl}/admin/login/?next=${encodeURIComponent(window.location.href)}`
+        return Promise.reject(error)
       }
+    } else if (error.request) {
+      // Network error or CORS error - might be authentication issue
+      console.error('Network error:', error.message)
+      // Don't redirect on network errors - let the component handle it
     }
     return Promise.reject(error)
   }
