@@ -15,6 +15,8 @@ from src.voip.models.schemas import (
     VoIPUser, VoIPUserCreate, VoIPUserUpdate, VoIPUserList,
     VoIPDevice, VoIPDeviceCreate, VoIPDeviceList,
     VoIPCallQueue,
+    VoIPCall, VoIPCallList,
+    TransferCallRequest, ConferenceRequest, RecordingRequest,
     VoIPError,
 )
 
@@ -274,6 +276,139 @@ class BaseVoIPAdapter(ABC):
         return AdapterResult.fail(
             code="NOT_SUPPORTED",
             message=f"{self.PROVIDER_NAME} does not support call queues"
+        )
+    
+    # ================================================================
+    # CALL CONTROL (Optional - not all providers support)
+    # ================================================================
+    
+    async def get_active_calls(
+        self,
+        user_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """Get list of active calls. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def get_call(self, call_id: str) -> AdapterResult:
+        """Get details of a specific call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def transfer_call(
+        self,
+        call_id: str,
+        request: TransferCallRequest
+    ) -> AdapterResult:
+        """Transfer a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def hold_call(self, call_id: str) -> AdapterResult:
+        """Put a call on hold. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def resume_call(self, call_id: str) -> AdapterResult:
+        """Resume a held call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def mute_call(self, call_id: str) -> AdapterResult:
+        """Mute audio for a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def unmute_call(self, call_id: str) -> AdapterResult:
+        """Unmute audio for a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def hangup_call(self, call_id: str) -> AdapterResult:
+        """End/terminate a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def create_conference(
+        self,
+        request: ConferenceRequest
+    ) -> AdapterResult:
+        """Create a conference call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def add_to_conference(
+        self,
+        conference_id: str,
+        call_id: str
+    ) -> AdapterResult:
+        """Add a call to an existing conference. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def remove_from_conference(
+        self,
+        conference_id: str,
+        call_id: str
+    ) -> AdapterResult:
+        """Remove a call from a conference. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def start_recording(
+        self,
+        call_id: str,
+        request: Optional[RecordingRequest] = None
+    ) -> AdapterResult:
+        """Start recording a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def stop_recording(self, call_id: str) -> AdapterResult:
+        """Stop recording a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def park_call(self, call_id: str) -> AdapterResult:
+        """Park a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    async def unpark_call(self, park_code: str) -> AdapterResult:
+        """Retrieve a parked call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call control"
         )
     
     # ================================================================

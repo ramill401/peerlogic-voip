@@ -505,3 +505,458 @@ def delete_device(request: Request, connection_id: str, device_id: str) -> JsonR
     except Exception as e:
         logger.exception("Failed to delete device")
         return error_response("DELETE_FAILED", str(e), status_code=500)
+
+
+# ================================================================
+# CALL CONTROL ENDPOINTS
+# ================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def list_active_calls(request: Request, connection_id: str) -> JsonResponse:
+    """List active calls for a connection."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    page = int(request.query_params.get('page', 1))
+    page_size = int(request.query_params.get('page_size', 50))
+    user_id = request.query_params.get('user_id')
+    
+    async def _list():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.get_active_calls(
+                user_id=user_id,
+                page=page,
+                page_size=page_size,
+            )
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_list())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to list active calls")
+        return error_response("LIST_FAILED", str(e), status_code=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def get_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Get details of a specific call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _get():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.get_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_get())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to get call")
+        return error_response("GET_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def transfer_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Transfer a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _transfer():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.transfer_call(call_id, request.data)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_transfer())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to transfer call")
+        return error_response("TRANSFER_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def hold_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Put a call on hold."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _hold():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.hold_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_hold())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to hold call")
+        return error_response("HOLD_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def resume_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Resume a held call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _resume():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.resume_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_resume())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to resume call")
+        return error_response("RESUME_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def mute_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Mute audio for a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _mute():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.mute_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_mute())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to mute call")
+        return error_response("MUTE_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def unmute_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Unmute audio for a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _unmute():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.unmute_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_unmute())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to unmute call")
+        return error_response("UNMUTE_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def hangup_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """End/terminate a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _hangup():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.hangup_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_hangup())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to hangup call")
+        return error_response("HANGUP_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def create_conference(request: Request, connection_id: str) -> JsonResponse:
+    """Create a conference call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _create():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.create_conference(request.data)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_create())
+        return JsonResponse(result, status=status.HTTP_201_CREATED)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to create conference")
+        return error_response("CONFERENCE_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def add_to_conference(request: Request, connection_id: str, conference_id: str) -> JsonResponse:
+    """Add a call to an existing conference."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    call_id = request.data.get('call_id')
+    if not call_id:
+        return error_response("MISSING_PARAMETER", "call_id is required", status_code=400)
+    
+    async def _add():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.add_to_conference(conference_id, call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_add())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to add to conference")
+        return error_response("ADD_CONFERENCE_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def remove_from_conference(request: Request, connection_id: str, conference_id: str, call_id: str) -> JsonResponse:
+    """Remove a call from a conference."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _remove():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.remove_from_conference(conference_id, call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_remove())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to remove from conference")
+        return error_response("REMOVE_CONFERENCE_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def start_recording(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Start recording a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _start():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.start_recording(call_id, request.data if request.data else None)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_start())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to start recording")
+        return error_response("RECORDING_START_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def stop_recording(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Stop recording a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _stop():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.stop_recording(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_stop())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to stop recording")
+        return error_response("RECORDING_STOP_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def park_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
+    """Park a call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    async def _park():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.park_call(call_id)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_park())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to park call")
+        return error_response("PARK_FAILED", str(e), status_code=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, CanManageVoIP])
+def unpark_call(request: Request, connection_id: str) -> JsonResponse:
+    """Retrieve a parked call."""
+    from src.voip.services import VoIPService, VoIPServiceError
+    
+    # Verify connection access
+    conn, error = verify_connection_access(request, connection_id)
+    if error:
+        return error
+    
+    park_code = request.data.get('park_code')
+    if not park_code:
+        return error_response("MISSING_PARAMETER", "park_code is required", status_code=400)
+    
+    async def _unpark():
+        service = VoIPService(connection_id, request.user)
+        try:
+            await service.connect()
+            return await service.unpark_call(park_code)
+        finally:
+            await service.disconnect()
+    
+    try:
+        result = run_async(_unpark())
+        return JsonResponse(result)
+    except VoIPServiceError as e:
+        return error_response(e.code, e.message, status_code=400)
+    except Exception as e:
+        logger.exception("Failed to unpark call")
+        return error_response("UNPARK_FAILED", str(e), status_code=500)

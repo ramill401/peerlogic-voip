@@ -50,6 +50,27 @@ class CallQueueStrategy(str, Enum):
     LINEAR = "linear"
 
 
+class CallStatus(str, Enum):
+    """Status of an active call."""
+    RINGING = "ringing"
+    CONNECTED = "connected"
+    ON_HOLD = "on_hold"
+    MUTED = "muted"
+    TRANSFERRING = "transferring"
+    CONFERENCE = "conference"
+    ENDED = "ended"
+    FAILED = "failed"
+    BUSY = "busy"
+    NO_ANSWER = "no_answer"
+
+
+class CallDirection(str, Enum):
+    """Direction of a call."""
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+    INTERNAL = "internal"
+
+
 # ============================================================
 # BASE MODELS
 # ============================================================
@@ -242,6 +263,68 @@ class VoIPCallQueue(VoIPBaseModel):
 
 
 # ============================================================
+# CALL MODELS
+# ============================================================
+
+class VoIPCall(VoIPBaseModel):
+    """
+    Universal representation of an active or historical call.
+    """
+    
+    id: str  # Call ID from provider
+    
+    # Call participants
+    from_number: str  # Caller number
+    to_number: str  # Called number
+    from_extension: Optional[str] = None
+    to_extension: Optional[str] = None
+    from_user_id: Optional[str] = None
+    to_user_id: Optional[str] = None
+    
+    # Call info
+    direction: CallDirection
+    status: CallStatus
+    
+    # Timestamps
+    started_at: Optional[datetime] = None
+    answered_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    duration: Optional[int] = None  # Duration in seconds
+    
+    # Call features
+    is_on_hold: bool = False
+    is_muted: bool = False
+    is_recorded: bool = False
+    is_conference: bool = False
+    
+    # Conference info (if applicable)
+    conference_id: Optional[str] = None
+    participants: List[str] = Field(default_factory=list)  # List of participant IDs
+    
+    # Provider-specific data
+    provider_metadata: Optional[ProviderMetadata] = None
+
+
+class TransferCallRequest(VoIPBaseModel):
+    """Request to transfer a call."""
+    target: str  # Extension, user_id, or phone number
+    transfer_type: str = "blind"  # "blind" or "attended"
+    hold_original: bool = False  # For attended transfer
+
+
+class ConferenceRequest(VoIPBaseModel):
+    """Request to create or manage a conference."""
+    participants: List[str] = Field(default_factory=list)  # List of call IDs or extensions
+    name: Optional[str] = None  # Conference name
+
+
+class RecordingRequest(VoIPBaseModel):
+    """Request to start/stop recording."""
+    action: str  # "start" or "stop"
+    format: Optional[str] = None  # "mp3", "wav", etc.
+
+
+# ============================================================
 # RESPONSE WRAPPERS
 # ============================================================
 
@@ -263,6 +346,11 @@ class VoIPUserList(PaginatedResponse):
 class VoIPDeviceList(PaginatedResponse):
     """Paginated list of devices."""
     items: List[VoIPDevice]
+
+
+class VoIPCallList(PaginatedResponse):
+    """Paginated list of calls."""
+    items: List[VoIPCall]
 
 
 # ============================================================

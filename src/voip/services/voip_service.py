@@ -18,7 +18,10 @@ from src.voip_admin.models import (
     AuditLog,
 )
 from src.voip.adapters import AdapterRegistry, AdapterConfig, AdapterResult
-from src.voip.models import VoIPUserCreate, VoIPUserUpdate, VoIPDeviceCreate
+from src.voip.models import (
+    VoIPUserCreate, VoIPUserUpdate, VoIPDeviceCreate,
+    TransferCallRequest, ConferenceRequest, RecordingRequest,
+)
 
 
 logger = logging.getLogger("voip.services")
@@ -479,6 +482,502 @@ class VoIPService:
             )
             return {"deleted": True, "device_id": device_id}
         else:
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    # ================================================================
+    # CALL CONTROL OPERATIONS
+    # ================================================================
+    
+    async def get_active_calls(
+        self,
+        user_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Dict:
+        """Get list of active calls."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.get_active_calls(
+            user_id=user_id,
+            page=page,
+            page_size=page_size,
+        )
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            data = result.data.model_dump()
+            
+            
+            await self._log_action(
+                action="read",
+                resource_type="call",
+                request_data={"user_id": user_id, "page": page},
+                response_data={"total": data.get("total", 0)},
+                result="success",
+                duration_ms=duration,
+            )
+            return data
+        else:
+            await self._log_action(
+                action="read",
+                resource_type="call",
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def get_call(self, call_id: str) -> Dict:
+        """Get details of a specific call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.get_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            data = result.data.model_dump()
+            
+            await self._log_action(
+                action="read",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return data
+        else:
+            await self._log_action(
+                action="read",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def transfer_call(self, call_id: str, request_data: Dict) -> Dict:
+        """Transfer a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        transfer_request = TransferCallRequest(**request_data)
+        result = await self._adapter.transfer_call(call_id, transfer_request)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            data = result.data
+            
+            await self._log_action(
+                action="transfer",
+                resource_type="call",
+                resource_id=call_id,
+                request_data=request_data,
+                result="success",
+                duration_ms=duration,
+            )
+            return data
+        else:
+            await self._log_action(
+                action="transfer",
+                resource_type="call",
+                resource_id=call_id,
+                request_data=request_data,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def hold_call(self, call_id: str) -> Dict:
+        """Put a call on hold."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.hold_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="hold",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="hold",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def resume_call(self, call_id: str) -> Dict:
+        """Resume a held call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.resume_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="resume",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="resume",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def mute_call(self, call_id: str) -> Dict:
+        """Mute audio for a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.mute_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="mute",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="mute",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def unmute_call(self, call_id: str) -> Dict:
+        """Unmute audio for a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.unmute_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="unmute",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="unmute",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def hangup_call(self, call_id: str) -> Dict:
+        """End/terminate a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.hangup_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="hangup",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="hangup",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def create_conference(self, request_data: Dict) -> Dict:
+        """Create a conference call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        conference_request = ConferenceRequest(**request_data)
+        result = await self._adapter.create_conference(conference_request)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="create_conference",
+                resource_type="call",
+                request_data=request_data,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="create_conference",
+                resource_type="call",
+                request_data=request_data,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def add_to_conference(self, conference_id: str, call_id: str) -> Dict:
+        """Add a call to an existing conference."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.add_to_conference(conference_id, call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="add_to_conference",
+                resource_type="call",
+                resource_id=call_id,
+                request_data={"conference_id": conference_id},
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="add_to_conference",
+                resource_type="call",
+                resource_id=call_id,
+                request_data={"conference_id": conference_id},
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def remove_from_conference(self, conference_id: str, call_id: str) -> Dict:
+        """Remove a call from a conference."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.remove_from_conference(conference_id, call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="remove_from_conference",
+                resource_type="call",
+                resource_id=call_id,
+                request_data={"conference_id": conference_id},
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="remove_from_conference",
+                resource_type="call",
+                resource_id=call_id,
+                request_data={"conference_id": conference_id},
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def start_recording(self, call_id: str, request_data: Optional[Dict] = None) -> Dict:
+        """Start recording a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        recording_request = RecordingRequest(**request_data) if request_data else None
+        result = await self._adapter.start_recording(call_id, recording_request)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="start_recording",
+                resource_type="call",
+                resource_id=call_id,
+                request_data=request_data or {},
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="start_recording",
+                resource_type="call",
+                resource_id=call_id,
+                request_data=request_data or {},
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def stop_recording(self, call_id: str) -> Dict:
+        """Stop recording a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.stop_recording(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="stop_recording",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="stop_recording",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def park_call(self, call_id: str) -> Dict:
+        """Park a call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.park_call(call_id)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="park",
+                resource_type="call",
+                resource_id=call_id,
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="park",
+                resource_type="call",
+                resource_id=call_id,
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
+            raise VoIPServiceError(
+                code=result.error.code,
+                message=result.error.message
+            )
+    
+    async def unpark_call(self, park_code: str) -> Dict:
+        """Retrieve a parked call."""
+        self._ensure_connected()
+        
+        start_time = datetime.now()
+        result = await self._adapter.unpark_call(park_code)
+        duration = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        if result.success:
+            await self._log_action(
+                action="unpark",
+                resource_type="call",
+                request_data={"park_code": park_code},
+                result="success",
+                duration_ms=duration,
+            )
+            return result.data
+        else:
+            await self._log_action(
+                action="unpark",
+                resource_type="call",
+                request_data={"park_code": park_code},
+                result="failure",
+                error_message=result.error.message,
+                duration_ms=duration,
+            )
             raise VoIPServiceError(
                 code=result.error.code,
                 message=result.error.message

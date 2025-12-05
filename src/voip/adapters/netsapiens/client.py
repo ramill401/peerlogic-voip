@@ -21,6 +21,9 @@ from src.voip.models.schemas import (
     VoIPUser, VoIPUserCreate, VoIPUserUpdate, VoIPUserList,
     VoIPDevice, VoIPDeviceCreate, VoIPDeviceList,
     VoIPCallQueue,
+    VoIPCall, VoIPCallList,
+    TransferCallRequest, ConferenceRequest, RecordingRequest,
+    CallStatus, CallDirection,
     UserStatus, DeviceStatus, DeviceType,
     ProviderMetadata,
 )
@@ -651,4 +654,427 @@ class NetSapiensAdapter(BaseVoIPAdapter):
             "unregistered": DeviceStatus.OFFLINE,
         }
         return status_map.get(ns_status, DeviceStatus.UNKNOWN)
+    
+    # ================================================================
+    # CALL CONTROL
+    # ================================================================
+    
+    async def get_active_calls(
+        self,
+        user_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """Get list of active calls."""
+        params = {
+            "domain": self.domain,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        }
+        
+        if user_id:
+            params["user"] = user_id
+        
+        result = await self._make_request(
+            "GET",
+            "/ns-api/v2/calls/active",
+            params=params
+        )
+        
+        if not result.success:
+            return result
+        
+        raw_calls = result.data.get("calls", [])
+        calls = [self._transform_call(c) for c in raw_calls]
+        total = result.data.get("total", len(calls))
+        
+        return AdapterResult.ok(VoIPCallList(
+            items=calls,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=(page * page_size) < total
+        ))
+    
+    async def get_call(self, call_id: str) -> AdapterResult:
+        """Get details of a specific call."""
+        result = await self._make_request(
+            "GET",
+            f"/ns-api/v2/calls/{call_id}",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        call = self._transform_call(result.data)
+        return AdapterResult.ok(call)
+    
+    async def transfer_call(
+        self,
+        call_id: str,
+        request: TransferCallRequest
+    ) -> AdapterResult:
+        """Transfer a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "target": request.target,
+            "transfer_type": request.transfer_type,
+        }
+        
+        if request.transfer_type == "attended" and request.hold_original:
+            ns_data["hold_original"] = True
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/transfer",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "transferred_to": request.target,
+            "status": "transferred"
+        })
+    
+    async def hold_call(self, call_id: str) -> AdapterResult:
+        """Put a call on hold."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "hold"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "status": "on_hold"
+        })
+    
+    async def resume_call(self, call_id: str) -> AdapterResult:
+        """Resume a held call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "resume"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "status": "connected"
+        })
+    
+    async def mute_call(self, call_id: str) -> AdapterResult:
+        """Mute audio for a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "mute"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "muted": True
+        })
+    
+    async def unmute_call(self, call_id: str) -> AdapterResult:
+        """Unmute audio for a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "unmute"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "muted": False
+        })
+    
+    async def hangup_call(self, call_id: str) -> AdapterResult:
+        """End/terminate a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "hangup"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "status": "ended"
+        })
+    
+    async def create_conference(
+        self,
+        request: ConferenceRequest
+    ) -> AdapterResult:
+        """Create a conference call."""
+        ns_data = {
+            "domain": self.domain,
+            "participants": request.participants,
+        }
+        
+        if request.name:
+            ns_data["name"] = request.name
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/conferences",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "conference_id": result.data.get("conference_id"),
+            "participants": request.participants,
+            "status": "active"
+        })
+    
+    async def add_to_conference(
+        self,
+        conference_id: str,
+        call_id: str
+    ) -> AdapterResult:
+        """Add a call to an existing conference."""
+        ns_data = {
+            "domain": self.domain,
+            "conference_id": conference_id,
+            "call_id": call_id
+        }
+        
+        result = await self._make_request(
+            "POST",
+            f"/ns-api/v2/conferences/{conference_id}/participants",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "conference_id": conference_id,
+            "call_id": call_id,
+            "status": "added"
+        })
+    
+    async def remove_from_conference(
+        self,
+        conference_id: str,
+        call_id: str
+    ) -> AdapterResult:
+        """Remove a call from a conference."""
+        result = await self._make_request(
+            "DELETE",
+            f"/ns-api/v2/conferences/{conference_id}/participants/{call_id}",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "conference_id": conference_id,
+            "call_id": call_id,
+            "status": "removed"
+        })
+    
+    async def start_recording(
+        self,
+        call_id: str,
+        request: Optional[RecordingRequest] = None
+    ) -> AdapterResult:
+        """Start recording a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "start_recording"
+        }
+        
+        if request and request.format:
+            ns_data["format"] = request.format
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/recording",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "recording": True,
+            "recording_id": result.data.get("recording_id")
+        })
+    
+    async def stop_recording(self, call_id: str) -> AdapterResult:
+        """Stop recording a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "stop_recording"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/recording",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "recording": False
+        })
+    
+    async def park_call(self, call_id: str) -> AdapterResult:
+        """Park a call."""
+        ns_data = {
+            "domain": self.domain,
+            "call_id": call_id,
+            "action": "park"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        park_code = result.data.get("park_code", "")
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "park_code": park_code,
+            "status": "parked"
+        })
+    
+    async def unpark_call(self, park_code: str) -> AdapterResult:
+        """Retrieve a parked call."""
+        ns_data = {
+            "domain": self.domain,
+            "park_code": park_code,
+            "action": "unpark"
+        }
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/calls/control",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "park_code": park_code,
+            "call_id": result.data.get("call_id"),
+            "status": "retrieved"
+        })
+    
+    def _transform_call(self, ns_call: Dict) -> VoIPCall:
+        """Transform NetSapiens call to universal VoIPCall."""
+        # Map NetSapiens call status to universal status
+        status_map = {
+            "ringing": CallStatus.RINGING,
+            "connected": CallStatus.CONNECTED,
+            "on_hold": CallStatus.ON_HOLD,
+            "muted": CallStatus.MUTED,
+            "transferring": CallStatus.TRANSFERRING,
+            "conference": CallStatus.CONFERENCE,
+            "ended": CallStatus.ENDED,
+            "failed": CallStatus.FAILED,
+            "busy": CallStatus.BUSY,
+            "no_answer": CallStatus.NO_ANSWER,
+        }
+        
+        # Determine call direction
+        direction = CallDirection.INTERNAL
+        from_num = ns_call.get("from_number", "")
+        to_num = ns_call.get("to_number", "")
+        
+        # Simple heuristic: if numbers look external, it's inbound/outbound
+        if from_num.startswith("+") or len(from_num) > 6:
+            direction = CallDirection.OUTBOUND if ns_call.get("direction") == "outbound" else CallDirection.INBOUND
+        
+        return VoIPCall(
+            id=ns_call.get("call_id", ""),
+            from_number=from_num,
+            to_number=to_num,
+            from_extension=ns_call.get("from_extension"),
+            to_extension=ns_call.get("to_extension"),
+            from_user_id=ns_call.get("from_user_id"),
+            to_user_id=ns_call.get("to_user_id"),
+            direction=direction,
+            status=status_map.get(ns_call.get("status", "connected"), CallStatus.CONNECTED),
+            started_at=self._parse_datetime(ns_call.get("started_at")),
+            answered_at=self._parse_datetime(ns_call.get("answered_at")),
+            ended_at=self._parse_datetime(ns_call.get("ended_at")),
+            duration=ns_call.get("duration"),
+            is_on_hold=ns_call.get("on_hold", False),
+            is_muted=ns_call.get("muted", False),
+            is_recorded=ns_call.get("recording", False),
+            is_conference=ns_call.get("conference", False),
+            conference_id=ns_call.get("conference_id"),
+            participants=ns_call.get("participants", []),
+            provider_metadata=ProviderMetadata(
+                provider_type=self.PROVIDER_TYPE,
+                raw_id=ns_call.get("call_id", ""),
+                raw_data=ns_call
+            )
+        )
 
