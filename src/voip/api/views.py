@@ -13,6 +13,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
 
 from src.voip_admin.models import Practice, ProviderConnection
 from src.voip_admin.permissions import IsPracticeMember, CanManageVoIP, CanAccessConnection
@@ -68,6 +70,17 @@ def verify_connection_access(request: Request, connection_id: str) -> Tuple[Opti
 # HEALTH & INFO ENDPOINTS
 # ================================================================
 
+@extend_schema(
+    summary="Health check",
+    description="Check if the API is healthy and running",
+    tags=["Health"],
+    responses={
+        200: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description="API is healthy"
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def api_health(request: Request) -> JsonResponse:
@@ -79,6 +92,17 @@ def api_health(request: Request) -> JsonResponse:
     })
 
 
+@extend_schema(
+    summary="API information",
+    description="Get API information including supported providers and endpoints",
+    tags=["Health"],
+    responses={
+        200: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description="API information"
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def api_info(request: Request) -> JsonResponse:
@@ -103,6 +127,17 @@ def api_info(request: Request) -> JsonResponse:
 # CONNECTION ENDPOINTS
 # ================================================================
 
+@extend_schema(
+    summary="List connections",
+    description="List all provider connections (filtered by practice for multi-tenant)",
+    tags=["Connections"],
+    responses={
+        200: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description="List of connections"
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def list_connections(request: Request) -> JsonResponse:
@@ -144,6 +179,24 @@ def list_connections(request: Request) -> JsonResponse:
     return JsonResponse({"connections": data, "total": len(data)})
 
 
+@extend_schema(
+    summary="Get connection",
+    description="Get a single connection by ID",
+    tags=["Connections"],
+    parameters=[
+        OpenApiParameter(
+            name="connection_id",
+            type=OpenApiTypes.UUID,
+            location=OpenApiParameter.PATH,
+            description="Connection ID"
+        )
+    ],
+    responses={
+        200: OpenApiResponse(response=OpenApiTypes.OBJECT),
+        404: OpenApiResponse(response=OpenApiTypes.OBJECT),
+        403: OpenApiResponse(response=OpenApiTypes.OBJECT)
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def get_connection(request: Request, connection_id: str) -> JsonResponse:
@@ -192,6 +245,23 @@ def get_connection(request: Request, connection_id: str) -> JsonResponse:
     })
 
 
+@extend_schema(
+    summary="Test connection",
+    description="Test a provider connection",
+    tags=["Connections"],
+    parameters=[
+        OpenApiParameter(
+            name="connection_id",
+            type=OpenApiTypes.UUID,
+            location=OpenApiParameter.PATH,
+            description="Connection ID"
+        )
+    ],
+    responses={
+        200: OpenApiResponse(response=OpenApiTypes.OBJECT),
+        400: OpenApiResponse(response=OpenApiTypes.OBJECT)
+    }
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def test_connection(request: Request, connection_id: str) -> JsonResponse:
@@ -225,6 +295,41 @@ def test_connection(request: Request, connection_id: str) -> JsonResponse:
 # USER ENDPOINTS
 # ================================================================
 
+@extend_schema(
+    summary="List users",
+    description="List users for a connection",
+    tags=["Users"],
+    parameters=[
+        OpenApiParameter(
+            name="connection_id",
+            type=OpenApiTypes.UUID,
+            location=OpenApiParameter.PATH,
+            description="Connection ID"
+        ),
+        OpenApiParameter(
+            name="page",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Page number"
+        ),
+        OpenApiParameter(
+            name="page_size",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Page size"
+        ),
+        OpenApiParameter(
+            name="search",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description="Search term"
+        )
+    ],
+    responses={
+        200: OpenApiResponse(response=OpenApiTypes.OBJECT),
+        403: OpenApiResponse(response=OpenApiTypes.OBJECT)
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def list_users(request: Request, connection_id: str) -> JsonResponse:
@@ -263,6 +368,7 @@ def list_users(request: Request, connection_id: str) -> JsonResponse:
         return error_response("LIST_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Get user", tags=["Users"])
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def get_user(request: Request, connection_id: str, user_id: str) -> JsonResponse:
@@ -292,6 +398,7 @@ def get_user(request: Request, connection_id: str, user_id: str) -> JsonResponse
         return error_response("GET_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Create user", tags=["Users"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def create_user(request: Request, connection_id: str) -> JsonResponse:
@@ -321,6 +428,7 @@ def create_user(request: Request, connection_id: str) -> JsonResponse:
         return error_response("CREATE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Update user", tags=["Users"])
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def update_user(request: Request, connection_id: str, user_id: str) -> JsonResponse:
@@ -350,6 +458,7 @@ def update_user(request: Request, connection_id: str, user_id: str) -> JsonRespo
         return error_response("UPDATE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Delete user", tags=["Users"])
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def delete_user(request: Request, connection_id: str, user_id: str) -> JsonResponse:
@@ -383,6 +492,7 @@ def delete_user(request: Request, connection_id: str, user_id: str) -> JsonRespo
 # DEVICE ENDPOINTS
 # ================================================================
 
+@extend_schema(summary="List devices", tags=["Devices"])
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def list_devices(request: Request, connection_id: str) -> JsonResponse:
@@ -420,6 +530,7 @@ def list_devices(request: Request, connection_id: str) -> JsonResponse:
         return error_response("LIST_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Get device", tags=["Devices"])
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def get_device(request: Request, connection_id: str, device_id: str) -> JsonResponse:
@@ -449,6 +560,7 @@ def get_device(request: Request, connection_id: str, device_id: str) -> JsonResp
         return error_response("GET_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Create device", tags=["Devices"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def create_device(request: Request, connection_id: str) -> JsonResponse:
@@ -478,6 +590,7 @@ def create_device(request: Request, connection_id: str) -> JsonResponse:
         return error_response("CREATE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Delete device", tags=["Devices"])
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def delete_device(request: Request, connection_id: str, device_id: str) -> JsonResponse:
@@ -511,6 +624,7 @@ def delete_device(request: Request, connection_id: str, device_id: str) -> JsonR
 # CALL CONTROL ENDPOINTS
 # ================================================================
 
+@extend_schema(summary="List active calls", tags=["Call Control"])
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def list_active_calls(request: Request, connection_id: str) -> JsonResponse:
@@ -548,6 +662,7 @@ def list_active_calls(request: Request, connection_id: str) -> JsonResponse:
         return error_response("LIST_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Get call", tags=["Call Control"])
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def get_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -577,6 +692,7 @@ def get_call(request: Request, connection_id: str, call_id: str) -> JsonResponse
         return error_response("GET_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Transfer call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def transfer_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -606,6 +722,7 @@ def transfer_call(request: Request, connection_id: str, call_id: str) -> JsonRes
         return error_response("TRANSFER_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Hold call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def hold_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -635,6 +752,7 @@ def hold_call(request: Request, connection_id: str, call_id: str) -> JsonRespons
         return error_response("HOLD_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Resume call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def resume_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -664,6 +782,7 @@ def resume_call(request: Request, connection_id: str, call_id: str) -> JsonRespo
         return error_response("RESUME_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Mute call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def mute_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -693,6 +812,7 @@ def mute_call(request: Request, connection_id: str, call_id: str) -> JsonRespons
         return error_response("MUTE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Unmute call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def unmute_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -722,6 +842,7 @@ def unmute_call(request: Request, connection_id: str, call_id: str) -> JsonRespo
         return error_response("UNMUTE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Hangup call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def hangup_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -751,6 +872,7 @@ def hangup_call(request: Request, connection_id: str, call_id: str) -> JsonRespo
         return error_response("HANGUP_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Create conference", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def create_conference(request: Request, connection_id: str) -> JsonResponse:
@@ -780,6 +902,7 @@ def create_conference(request: Request, connection_id: str) -> JsonResponse:
         return error_response("CONFERENCE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Add to conference", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def add_to_conference(request: Request, connection_id: str, conference_id: str) -> JsonResponse:
@@ -813,6 +936,7 @@ def add_to_conference(request: Request, connection_id: str, conference_id: str) 
         return error_response("ADD_CONFERENCE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Remove from conference", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def remove_from_conference(request: Request, connection_id: str, conference_id: str, call_id: str) -> JsonResponse:
@@ -842,6 +966,7 @@ def remove_from_conference(request: Request, connection_id: str, conference_id: 
         return error_response("REMOVE_CONFERENCE_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Start recording", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def start_recording(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -871,6 +996,7 @@ def start_recording(request: Request, connection_id: str, call_id: str) -> JsonR
         return error_response("RECORDING_START_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Stop recording", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def stop_recording(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -900,6 +1026,7 @@ def stop_recording(request: Request, connection_id: str, call_id: str) -> JsonRe
         return error_response("RECORDING_STOP_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Park call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def park_call(request: Request, connection_id: str, call_id: str) -> JsonResponse:
@@ -929,6 +1056,7 @@ def park_call(request: Request, connection_id: str, call_id: str) -> JsonRespons
         return error_response("PARK_FAILED", str(e), status_code=500)
 
 
+@extend_schema(summary="Unpark call", tags=["Call Control"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, CanManageVoIP])
 def unpark_call(request: Request, connection_id: str) -> JsonResponse:
