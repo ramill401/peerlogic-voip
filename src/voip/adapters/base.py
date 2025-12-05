@@ -10,6 +10,7 @@ This ensures every provider can be used interchangeably by Peerlogic.
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
+from datetime import datetime
 
 from src.voip.models.schemas import (
     VoIPUser, VoIPUserCreate, VoIPUserUpdate, VoIPUserList,
@@ -409,6 +410,132 @@ class BaseVoIPAdapter(ABC):
         return AdapterResult.fail(
             code="NOT_SUPPORTED",
             message=f"{self.PROVIDER_NAME} does not support call control"
+        )
+    
+    # ================================================================
+    # CALL HISTORY (CDR) - Optional
+    # ================================================================
+    
+    async def get_call_history(
+        self,
+        user_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """Get call history (CDR). Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support call history"
+        )
+    
+    # ================================================================
+    # RECORDINGS - Optional
+    # ================================================================
+    
+    async def get_recording(self, call_id: str, user_id: Optional[str] = None) -> AdapterResult:
+        """Get recording for a call. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support recordings"
+        )
+    
+    # ================================================================
+    # PHONE NUMBERS - Optional
+    # ================================================================
+    
+    async def list_phone_numbers(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        assigned: Optional[bool] = None,
+    ) -> AdapterResult:
+        """List phone numbers. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support phone number management"
+        )
+    
+    async def get_phone_number(self, number_id: str) -> AdapterResult:
+        """Get a specific phone number. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support phone number management"
+        )
+    
+    # ================================================================
+    # VOICEMAIL - Optional
+    # ================================================================
+    
+    async def list_voicemails(
+        self,
+        user_id: str,
+        folder: str = "inbox",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """List voicemails for a user. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support voicemail"
+        )
+    
+    async def get_voicemail(self, voicemail_id: str, user_id: str) -> AdapterResult:
+        """Get a specific voicemail. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support voicemail"
+        )
+    
+    async def delete_voicemail(self, voicemail_id: str, user_id: str) -> AdapterResult:
+        """Delete a voicemail. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support voicemail"
+        )
+    
+    # ================================================================
+    # MEETINGS - Optional
+    # ================================================================
+    
+    async def create_meeting(
+        self,
+        user_id: str,
+        name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        duration: Optional[int] = None,
+    ) -> AdapterResult:
+        """Create a meeting. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support meetings"
+        )
+    
+    async def get_meeting(self, meeting_id: str) -> AdapterResult:
+        """Get meeting details. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support meetings"
+        )
+    
+    async def list_meetings(
+        self,
+        user_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """List meetings. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support meetings"
+        )
+    
+    async def delete_meeting(self, meeting_id: str) -> AdapterResult:
+        """Delete a meeting. Override if provider supports."""
+        return AdapterResult.fail(
+            code="NOT_SUPPORTED",
+            message=f"{self.PROVIDER_NAME} does not support meetings"
         )
     
     # ================================================================

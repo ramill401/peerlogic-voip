@@ -1077,4 +1077,406 @@ class NetSapiensAdapter(BaseVoIPAdapter):
                 raw_data=ns_call
             )
         )
+    
+    # ================================================================
+    # CALL QUEUES (NetSapiens Implementation)
+    # ================================================================
+    
+    async def list_call_queues(self) -> AdapterResult:
+        """List all call queues in domain."""
+        result = await self._make_request(
+            "GET",
+            "/ns-api/v2/callqueues",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        raw_queues = result.data.get("callqueues", [])
+        queues = [self._transform_call_queue(q) for q in raw_queues]
+        
+        return AdapterResult.ok({
+            "items": queues,
+            "total": len(queues)
+        })
+    
+    async def get_call_queue(self, queue_id: str) -> AdapterResult:
+        """Get a specific call queue."""
+        result = await self._make_request(
+            "GET",
+            f"/ns-api/v2/callqueues/{queue_id}",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        queue = self._transform_call_queue(result.data)
+        return AdapterResult.ok(queue)
+    
+    def _transform_call_queue(self, ns_queue: Dict) -> VoIPCallQueue:
+        """Transform NetSapiens call queue to universal format."""
+        from src.voip.models.schemas import CallQueueMember, CallQueueStrategy
+        
+        strategy_map = {
+            "ringall": CallQueueStrategy.RING_ALL,
+            "roundrobin": CallQueueStrategy.ROUND_ROBIN,
+            "leastrecent": CallQueueStrategy.LEAST_RECENT,
+            "fewestcalls": CallQueueStrategy.FEWEST_CALLS,
+        }
+        
+        members = []
+        for agent in ns_queue.get("agents", []):
+            members.append(CallQueueMember(
+                user_id=agent.get("user_id", ""),
+                priority=agent.get("priority", 1),
+                is_active=agent.get("status") == "active"
+            ))
+        
+        return VoIPCallQueue(
+            id=ns_queue.get("queue_id", ""),
+            name=ns_queue.get("name", ""),
+            extension=ns_queue.get("extension"),
+            strategy=strategy_map.get(ns_queue.get("strategy", "ringall"), CallQueueStrategy.RING_ALL),
+            ring_time=ns_queue.get("ring_time", 20),
+            max_wait_time=ns_queue.get("max_wait_time", 300),
+            members=members,
+            overflow_destination=ns_queue.get("overflow"),
+            is_active=ns_queue.get("status") == "active",
+            provider_metadata=ProviderMetadata(
+                provider_type=self.PROVIDER_TYPE,
+                raw_id=ns_queue.get("queue_id", ""),
+                raw_data=ns_queue
+            )
+        )
+    
+    # ================================================================
+    # CDR (Call History)
+    # ================================================================
+    
+    async def get_call_history(
+        self,
+        user_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """Get call history (CDR)."""
+        params = {
+            "domain": self.domain,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        }
+        
+        if user_id:
+            params["user"] = user_id
+        if start_date:
+            params["start_date"] = start_date.isoformat()
+        if end_date:
+            params["end_date"] = end_date.isoformat()
+        
+        result = await self._make_request(
+            "GET",
+            "/ns-api/v2/cdrs",
+            params=params
+        )
+        
+        if not result.success:
+            return result
+        
+        raw_cdrs = result.data.get("cdrs", [])
+        calls = [self._transform_cdr(cdr) for cdr in raw_cdrs]
+        total = result.data.get("total", len(calls))
+        
+        return AdapterResult.ok(VoIPCallList(
+            items=calls,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=(page * page_size) < total
+        ))
+    
+    def _transform_cdr(self, cdr: Dict) -> VoIPCall:
+        """Transform NetSapiens CDR to VoIPCall."""
+        return VoIPCall(
+            id=cdr.get("call_id", ""),
+            from_number=cdr.get("from_number", ""),
+            to_number=cdr.get("to_number", ""),
+            from_extension=cdr.get("from_extension"),
+            to_extension=cdr.get("to_extension"),
+            from_user_id=cdr.get("from_user_id"),
+            to_user_id=cdr.get("to_user_id"),
+            direction=self._map_cdr_direction(cdr),
+            status=CallStatus.ENDED,  # CDR is always completed calls
+            started_at=self._parse_datetime(cdr.get("start_time")),
+            answered_at=self._parse_datetime(cdr.get("answer_time")),
+            ended_at=self._parse_datetime(cdr.get("end_time")),
+            duration=cdr.get("duration"),
+            is_recorded=cdr.get("recorded", False),
+            provider_metadata=ProviderMetadata(
+                provider_type=self.PROVIDER_TYPE,
+                raw_id=cdr.get("call_id", ""),
+                raw_data=cdr
+            )
+        )
+    
+    def _map_cdr_direction(self, cdr: Dict) -> CallDirection:
+        """Map CDR direction."""
+        call_type = cdr.get("call_type", "").lower()
+        if "inbound" in call_type or "incoming" in call_type:
+            return CallDirection.INBOUND
+        elif "outbound" in call_type or "outgoing" in call_type:
+            return CallDirection.OUTBOUND
+        return CallDirection.INTERNAL
+    
+    # ================================================================
+    # RECORDINGS
+    # ================================================================
+    
+    async def get_recording(self, call_id: str, user_id: Optional[str] = None) -> AdapterResult:
+        """Get recording for a call."""
+        params = {"domain": self.domain, "call_id": call_id}
+        if user_id:
+            params["user"] = user_id
+        
+        result = await self._make_request(
+            "GET",
+            f"/ns-api/v2/recordings/{call_id}",
+            params=params
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "call_id": call_id,
+            "recording_url": result.data.get("recording_url"),
+            "recording_id": result.data.get("recording_id"),
+            "duration": result.data.get("duration"),
+            "format": result.data.get("format"),
+            "created_at": self._parse_datetime(result.data.get("created_at")),
+        })
+    
+    # ================================================================
+    # PHONE NUMBERS
+    # ================================================================
+    
+    async def list_phone_numbers(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        assigned: Optional[bool] = None,
+    ) -> AdapterResult:
+        """List phone numbers in domain."""
+        params = {
+            "domain": self.domain,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        }
+        
+        if assigned is not None:
+            params["assigned"] = "true" if assigned else "false"
+        
+        result = await self._make_request(
+            "GET",
+            "/ns-api/v2/phonenumbers",
+            params=params
+        )
+        
+        if not result.success:
+            return result
+        
+        numbers = result.data.get("phonenumbers", [])
+        total = result.data.get("total", len(numbers))
+        
+        return AdapterResult.ok({
+            "items": numbers,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "has_more": (page * page_size) < total
+        })
+    
+    async def get_phone_number(self, number_id: str) -> AdapterResult:
+        """Get a specific phone number."""
+        result = await self._make_request(
+            "GET",
+            f"/ns-api/v2/phonenumbers/{number_id}",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok(result.data)
+    
+    # ================================================================
+    # VOICEMAIL
+    # ================================================================
+    
+    async def list_voicemails(
+        self,
+        user_id: str,
+        folder: str = "inbox",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """List voicemails for a user."""
+        params = {
+            "domain": self.domain,
+            "user": user_id,
+            "folder": folder,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        }
+        
+        result = await self._make_request(
+            "GET",
+            "/ns-api/v2/voicemails",
+            params=params
+        )
+        
+        if not result.success:
+            return result
+        
+        voicemails = result.data.get("voicemails", [])
+        total = result.data.get("total", len(voicemails))
+        
+        return AdapterResult.ok({
+            "items": voicemails,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "has_more": (page * page_size) < total
+        })
+    
+    async def get_voicemail(self, voicemail_id: str, user_id: str) -> AdapterResult:
+        """Get a specific voicemail."""
+        result = await self._make_request(
+            "GET",
+            f"/ns-api/v2/voicemails/{voicemail_id}",
+            params={"domain": self.domain, "user": user_id}
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok(result.data)
+    
+    async def delete_voicemail(self, voicemail_id: str, user_id: str) -> AdapterResult:
+        """Delete a voicemail."""
+        result = await self._make_request(
+            "DELETE",
+            f"/ns-api/v2/voicemails/{voicemail_id}",
+            params={"domain": self.domain, "user": user_id}
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({"deleted": True, "voicemail_id": voicemail_id})
+    
+    # ================================================================
+    # MEETINGS
+    # ================================================================
+    
+    async def create_meeting(
+        self,
+        user_id: str,
+        name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        duration: Optional[int] = None,
+    ) -> AdapterResult:
+        """Create a meeting."""
+        ns_data = {
+            "domain": self.domain,
+            "user": user_id,
+        }
+        
+        if name:
+            ns_data["name"] = name
+        if start_time:
+            ns_data["start_time"] = start_time.isoformat()
+        if duration:
+            ns_data["duration"] = duration
+        
+        result = await self._make_request(
+            "POST",
+            "/ns-api/v2/meetings",
+            json_data=ns_data
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({
+            "meeting_id": result.data.get("meeting_id"),
+            "meeting_url": result.data.get("meeting_url"),
+            "pin": result.data.get("pin"),
+            "status": "created"
+        })
+    
+    async def get_meeting(self, meeting_id: str) -> AdapterResult:
+        """Get meeting details."""
+        result = await self._make_request(
+            "GET",
+            f"/ns-api/v2/meetings/{meeting_id}",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok(result.data)
+    
+    async def list_meetings(
+        self,
+        user_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> AdapterResult:
+        """List meetings."""
+        params = {
+            "domain": self.domain,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        }
+        
+        if user_id:
+            params["user"] = user_id
+        
+        result = await self._make_request(
+            "GET",
+            "/ns-api/v2/meetings",
+            params=params
+        )
+        
+        if not result.success:
+            return result
+        
+        meetings = result.data.get("meetings", [])
+        total = result.data.get("total", len(meetings))
+        
+        return AdapterResult.ok({
+            "items": meetings,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "has_more": (page * page_size) < total
+        })
+    
+    async def delete_meeting(self, meeting_id: str) -> AdapterResult:
+        """Delete a meeting."""
+        result = await self._make_request(
+            "DELETE",
+            f"/ns-api/v2/meetings/{meeting_id}",
+            params={"domain": self.domain}
+        )
+        
+        if not result.success:
+            return result
+        
+        return AdapterResult.ok({"deleted": True, "meeting_id": meeting_id})
 
